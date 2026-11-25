@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="theme-color" content="#E40138">
+  <meta name="robots" content="noindex">
+  <title>Escáner · Garita Las Delicias</title>
+  <style>
+    :root { --rojo: #E40138; --oscuro: #111827; --fondo: #F9FAFB; --borde: #E5E7EB; --texto: #111827; --suave: #6B7280;
+            --verde: #2E7D32; --azul: #1565C0; --ambar: #B45309; --ambar-sv: #FEF3C7; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: var(--fondo); color: var(--texto); display: flex; flex-direction: column; }
+    header { background: var(--rojo); color: #fff; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; }
+    header b { font-size: 17px; }
+    header span { font-size: 14px; opacity: .9; font-variant-numeric: tabular-nums; }
+    main { flex: 1; max-width: 560px; width: 100%; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+    .camara { position: relative; background: var(--oscuro); border-radius: 20px; overflow: hidden; aspect-ratio: 3 / 4; max-height: 62vh; }
+    .camara video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .marco { position: absolute; inset: 18% 14%; border-radius: 18px; box-shadow: 0 0 0 9999px rgba(0,0,0,.35); }
+    .marco::before, .marco::after { content: ""; position: absolute; inset: 0; border-radius: 18px; border: 4px solid transparent; }
+    .marco::before { border-top-color: #fff; border-left-color: #fff; clip-path: polygon(0 0, 30% 0, 30% 4px, 4px 4px, 4px 30%, 0 30%); }
+    .marco::after { border-bottom-color: #fff; border-right-color: #fff; clip-path: polygon(100% 100%, 70% 100%, 70% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 70%, 100% 70%); }
+    .linea { position: absolute; left: 16%; right: 16%; height: 3px; background: var(--rojo); box-shadow: 0 0 12px var(--rojo); top: 50%; animation: barrer 2.2s ease-in-out infinite; }
+    @keyframes barrer { 0%, 100% { top: 22%; } 50% { top: 76%; } }
+    @media (prefers-reduced-motion: reduce) { .linea { animation: none; } }
+    .aviso { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; color: #fff; background: var(--oscuro); font-size: 15px; line-height: 1.45; }
+    .aviso b { font-size: 18px; }
+    .oculto { display: none !important; }
+    .btn { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 52px; border: 0; border-radius: 14px; font: 700 16px inherit; font-family: inherit; text-decoration: none; cursor: pointer; }
+    .btn-rojo { background: var(--rojo); color: #fff; }
+    .btn-gris { background: #fff; color: var(--texto); border: 1px solid var(--borde); }
+    .resultado { border-radius: 20px; color: #fff; text-align: center; padding: 22px 16px; }
+    .resultado .grande { font-size: 40px; font-weight: 800; letter-spacing: .5px; line-height: 1.05; }
+    .resultado .nombre { font-size: 20px; font-weight: 700; margin-top: 10px; }
+    .resultado .meta { font-size: 14px; opacity: .92; margin-top: 4px; }
+    .resultado .detalle { display: inline-block; margin-top: 10px; background: rgba(255,255,255,.2); padding: 6px 12px; border-radius: 999px; font-weight: 600; font-size: 14px; }
+    .r-INGRESO { background: var(--verde); } .r-SALIDA { background: var(--azul); } .r-RETORNO { background: var(--ambar); }
+    .r-YA_REGISTRADO { background: #8D6E63; } .r-LEIDO { background: #1B5E20; } .r-RECHAZADO, .r-ERROR { background: #C62828; } .r-ESPERA { background: #374151; }
+    .pie { color: var(--suave); font-size: 13px; text-align: center; }
+    .fila { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  </style>
+</head>
+<body>
+  <header><b>Las Delicias · Escáner</b><span id="reloj"></span></header>
+  <main>
+    <div class="camara" id="camara">
+      <video id="video" playsinline muted autoplay></video>
+      <div class="marco"></div><div class="linea"></div>
+      <div class="aviso" id="aviso">
+        <b>📷 Escáner de la garita</b>
+        <span>Toca el botón y permite el uso de la cámara.</span>
+        <button class="btn btn-rojo" id="btnActivar" type="button" style="max-width:280px">Activar cámara</button>
+      </div>
+    </div>
+    <div class="resultado r-ESPERA" id="resultado">
+      <div class="grande" style="font-size:22px">Apunta al QR del fotocheck</div>
+      <div class="meta">Se registra solo: ingreso o salida</div>
+    </div>
+    <div class="fila">
+      <a class="btn btn-gris" id="lnkPanel" href="#">Panel y registro</a>
+      <button class="btn btn-gris" id="btnFoto" type="button">📸 Foto del QR</button>
+    </div>
+    <input type="file" accept="image/*" capture="environment" id="foto" class="oculto">
+    <div class="pie" id="pie">Las Delicias · control de garita</div>
+  </main>
+
+<script>
+(function () {
+  'use strict';
+  var CLAVE_ALMACEN = 'garita-delicias-config';
+  var video = document.getElementById('video');
+  var aviso = document.getElementById('aviso');
+  var caja = document.getElementById('resultado');
+  var lienzo = document.createElement('canvas');
+  var ctx = lienzo.getContext('2d', { willReadFrequently: true });
+  var detector = null, flujo = null, bucle = null, ocupado = false, reanudar = null;
+  var ultimo = { codigo: '', momento: 0 };
+
+  /* ---------- Configuración: llega en el enlace después de "#" y se guarda en este celular ---------- */
+  function leerConfig() {
+    var h = new URLSearchParams(location.hash.slice(1));
+    var u = h.get('u'), k = h.get('k');
+    if (u && k && /^https:\/\/script\.google\.com\//.test(u)) {
+      try { localStorage.setItem(CLAVE_ALMACEN, JSON.stringify({ u: u, k: k })); } catch (e) { /* sin almacenamiento */ }
+      return { u: u, k: k };
+    }
+    try { return JSON.parse(localStorage.getItem(CLAVE_ALMACEN) || 'null'); } catch (e) { return null; }
+  }
+  var CONFIG = leerConfig();
+
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function reloj() { document.getElementById('reloj').textContent = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }); }
+  reloj(); setInterval(reloj, 15000);
+
+  function mostrar(clase, grande, nombre, meta, detalle) {
+    caja.className = 'resultado r-' + clase;
+    caja.innerHTML = '<div class="grande">' + esc(grande) + '</div>' +
+      (nombre ? '<div class="nombre">' + esc(nombre) + '</div>' : '') +
+      (meta ? '<div class="meta">' + esc(meta) + '</div>' : '') +
+      (detalle ? '<div class="detalle">' + esc(detalle) + '</div>' : '');
+  }
+  function pitido(ok) {
+    try {
+      var a = new (window.AudioContext || window.webkitAudioContext)();
+      var o = a.createOscillator(), g = a.createGain();
+      o.frequency.value = ok ? 880 : 240; g.gain.value = 0.15; o.connect(g); g.connect(a.destination);
+      o.start(); o.stop(a.currentTime + (ok ? 0.15 : 0.4));
+    } catch (e) { /* sin audio */ }
+    if (navigator.vibrate) navigator.vibrate(ok ? 150 : [90, 60, 90]);
+  }
+
+  if (!CONFIG) {
+    aviso.innerHTML = '<b>Falta el enlace de la garita</b><span>Abre este escáner desde el enlace que te enviaron (en la hoja: menú Garita → Enlace para el vigilante).</span>';
+    document.getElementById('lnkPanel').classList.add('oculto');
+    document.getElementById('btnFoto').classList.add('oculto');
+    return;
+  }
+  document.getElementById('lnkPanel').href = CONFIG.u + '?k=' + encodeURIComponent(CONFIG.k);
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search); // no deja la clave a la vista
+
+  /* ---------- Lectura de QR: lector propio del navegador o jsQR ---------- */
+  function cargarJsQR() {
+    if (window.jsQR) return Promise.resolve(true);
+    var fuentes = ['https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js', 'https://unpkg.com/jsqr@1.4.0/dist/jsQR.js'];
+    return fuentes.reduce(function (cadena, src) {
+      return cadena.then(function (ok) {
+        if (ok) return true;
+        return new Promise(function (listo) {
+          var s = document.createElement('script'); s.src = src; s.async = true;
+          var t = setTimeout(function () { listo(false); }, 8000);
+          s.onload = function () { clearTimeout(t); listo(Boolean(window.jsQR)); };
+          s.onerror = function () { clearTimeout(t); listo(false); };
+          document.head.appendChild(s);
+        });
+      });
+    }, Promise.resolve(false));
+  }
+  function prepararLector() {
+    if (!('BarcodeDetector' in window)) return cargarJsQR();
+    return window.BarcodeDetector.getSupportedFormats().then(function (f) {
+      if (f.indexOf('qr_code') >= 0) { detector = new window.BarcodeDetector({ formats: ['qr_code'] }); return true; }
+      return cargarJsQR();
+    }).catch(cargarJsQR);
+  }
+  function leerJsQR(fuente, ancho, alto, esFoto) {
+    if (!window.jsQR || !ancho) return null;
+    var lados = esFoto ? [1400, 1000, 700] : [800];
+    for (var i = 0; i < lados.length; i++) {
+      var e = Math.min(1, lados[i] / Math.max(ancho, alto));
+      lienzo.width = Math.round(ancho * e); lienzo.height = Math.round(alto * e);
+      ctx.drawImage(fuente, 0, 0, lienzo.width, lienzo.height);
+      var img = ctx.getImageData(0, 0, lienzo.width, lienzo.height);
+      var r = window.jsQR(img.data, img.width, img.height, { inversionAttempts: esFoto ? 'attemptBoth' : 'dontInvert' });
+      if (r && r.data) return r.data;
+    }
+    return null;
+  }
+  function leer(fuente, ancho, alto, esFoto) {
+    if (detector) {
+      return detector.detect(fuente).then(function (r) { return r.length ? r[0].rawValue : leerJsQR(fuente, ancho, alto, esFoto); })
+        .catch(function () { return leerJsQR(fuente, ancho, alto, esFoto); });
+    }
+    return Promise.resolve(leerJsQR(fuente, ancho, alto, esFoto));
+  }
+
+  /* ---------- Código dentro del QR ---------- */
+  function codigoDe(texto) {
+    var t = String(texto || '').trim();
+    var m = /[?&](?:qr|c)=([^&#\s]+)/.exec(t);
+    if (m) { try { return decodeURIComponent(m[1]).toUpperCase(); } catch (e) { return ''; } }
+    if (/^https?:\/\//i.test(t)) return '';
+    return /^[A-Z0-9-]{2,20}$/i.test(t) ? t.toUpperCase() : '';
+  }
+
+  /* ---------- Registro en Google Sheets ---------- */
+  function registrar(texto) {
+    var codigo = codigoDe(texto);
+    if (!codigo) { pitido(false); mostrar('RECHAZADO', 'QR NO VÁLIDO', '', 'Este QR no es de la garita'); return pausar(2500); }
+    if (codigo === ultimo.codigo && Date.now() - ultimo.momento < 8000) { ocupado = false; return; }
+    ultimo = { codigo: codigo, momento: Date.now() };
+    ocupado = true;
+    pitido(true); // aviso inmediato: el QR ya se leyó
+    mostrar('LEIDO', '✅ QR leído', codigo, 'Registrando en el sistema…');
+    var base = CONFIG.u + '?qr=' + encodeURIComponent(codigo) + '&k=' + encodeURIComponent(CONFIG.k);
+    fetch(base + '&formato=json', { method: 'GET', redirect: 'follow' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) {
+        if (d.vista === 'vehiculo' || d.vista === 'visita') { location.href = base; return; } // formulario en la app
+        if (d.vista === 'error') { pitido(false); mostrar('ERROR', 'ERROR', '', d.mensaje || ''); return pausar(4000); }
+        var titulos = { INGRESO: '✅ REGISTRADO', SALIDA: '✅ REGISTRADO', RETORNO: '✅ REGISTRADO', YA_REGISTRADO: '⏸️ YA ESTABA REGISTRADO', RECHAZADO: '⛔ RECHAZADO' };
+        var movimiento = { INGRESO: 'Ingreso', SALIDA: 'Salida', RETORNO: 'Retorno' }[d.resultado];
+        if (d.resultado === 'RECHAZADO') pitido(false);
+        mostrar(d.resultado || 'ERROR', titulos[d.resultado] || d.resultado, d.nombre,
+          [movimiento ? movimiento + ' a las ' + d.hora : d.hora, d.codigo, d.area].filter(Boolean).join(' · '),
+          d.tardanza > 0 ? 'Tardanza: ' + d.tardanza + ' min' : d.detalle);
+        pausar(d.resultado === 'RECHAZADO' ? 3500 : 3000);
+      })
+      .catch(function () { location.href = base; }); // sin respuesta directa: abre la pantalla de la app
+  }
+  function pausar(ms) {
+    ocupado = true;
+    clearTimeout(reanudar);
+    reanudar = setTimeout(function () { ocupado = false; mostrar('ESPERA', 'Apunta al siguiente QR', '', 'La cámara sigue activa'); }, ms);
+  }
+
+  /* ---------- Cámara ---------- */
+  function encender() {
+    aviso.innerHTML = '<b>📷 Activando la cámara…</b><span>Si el celular lo pide, toca Permitir.</span>';
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return fallo('Este navegador no permite la cámara. Abre el enlace en Chrome o Safari.');
+    prepararLector().then(function (hay) {
+      if (!hay && !detector) return fallo('No se pudo cargar el lector de QR. Revisa tu internet.');
+      return navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }).then(function (s) {
+        flujo = s; video.srcObject = s; return video.play();
+      }).then(function () {
+        aviso.classList.add('oculto');
+        clearInterval(bucle);
+        bucle = setInterval(function () {
+          if (ocupado || video.readyState < 2) return;
+          ocupado = true;
+          leer(video, video.videoWidth, video.videoHeight, false).then(function (t) {
+            if (t) registrar(t); else ocupado = false;
+          });
+        }, 220);
+      });
+    }).catch(function (e) {
+      var n = (e && e.name) || '';
+      fallo(n === 'NotAllowedError'
+        ? 'Permiso de cámara bloqueado. Toca el candado o ⚙ junto a la dirección → Permisos → Cámara → Permitir, y recarga.'
+        : n === 'NotFoundError' ? 'Este aparato no tiene cámara.' : 'No se pudo abrir la cámara (' + esc(n || e) + ').');
+    });
+  }
+  function fallo(texto) {
+    aviso.classList.remove('oculto');
+    aviso.innerHTML = '<b>📷 Cámara no disponible</b><span>' + texto + '</span>' +
+      '<button class="btn btn-rojo" id="btnReintentar" type="button" style="max-width:280px">Reintentar</button>';
+    document.getElementById('btnReintentar').onclick = encender;
+  }
+  document.getElementById('btnActivar').onclick = encender;
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'camera' }).then(function (p) { if (p.state === 'granted') encender(); }).catch(function () {});
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden && flujo) { flujo.getTracks().forEach(function (t) { t.stop(); }); flujo = null; clearInterval(bucle); aviso.classList.remove('oculto'); aviso.innerHTML = '<b>📷 Cámara en pausa</b><button class="btn btn-rojo" id="btnVolver" type="button" style="max-width:280px">Activar cámara</button>'; document.getElementById('btnVolver').onclick = encender; }
+  });
+
+  /* ---------- Plan B: foto del QR ---------- */
+  document.getElementById('btnFoto').onclick = function () { document.getElementById('foto').click(); };
+  document.getElementById('foto').onchange = function (e) {
+    var archivo = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!archivo) return;
+    mostrar('ESPERA', 'Leyendo la foto…');
+    prepararLector().then(function () {
+      var img = new Image();
+      img.onload = function () {
+        leer(img, img.naturalWidth, img.naturalHeight, true).then(function (t) {
+          URL.revokeObjectURL(img.src);
+          ocupado = false;
+          if (t) registrar(t); else { pitido(false); mostrar('RECHAZADO', 'SIN QR', '', 'No se encontró un QR en la foto. Acércate más.'); }
+        });
+      };
+      img.src = URL.createObjectURL(archivo);
+    });
+  };
+})();
+</script>
+</body>
+</html>
